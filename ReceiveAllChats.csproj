@@ -7,7 +7,7 @@
     <Authors>maschine</Authors>
     <Company>https://github.com/maschine34675/ReceiveAllChats</Company>
     <AssemblyName>maschine-ReceiveAllChats</AssemblyName>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <AssemblyVersion>1.0.1</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <Version>$(AssemblyVersion)</Version>
     <LangVersion>latest</LangVersion>

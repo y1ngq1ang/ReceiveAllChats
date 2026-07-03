@@ -8,6 +8,8 @@ namespace ReceiveAllChats;
 
 internal static class AttachmentCollector
 {
+    private const int RequestTimeoutMs = 15000;
+
     public static bool HasPendingAttachments(SocialNetworkClass socialNetwork) =>
         socialNetwork.Dialogues.Any(d =>
             d.Type != EMessageType.GlobalChat && (d.AttachmentsNew > 0 || d.HasMessagesWithRewards));
@@ -21,42 +23,50 @@ internal static class AttachmentCollector
                 await Task.Yield();
             }
 
-            await RequestNextDialoguePage(socialNetwork);
+            if (!await RequestNextDialoguePage(socialNetwork))
+            {
+                break;
+            }
         }
 
         var dialogues = socialNetwork.Dialogues
-            .Where(d => d.Type != EMessageType.GlobalChat && (d.AttachmentsNew > 0 || d.HasMessagesWithRewards))
+            .Where(d => d.Type != EMessageType.GlobalChat)
             .ToList();
-
-        if (dialogues.Count == 0)
-        {
-            return Array.Empty<ChatMessageClass>();
-        }
 
         var results = await Task.WhenAll(dialogues.Select(d => FetchDialogAttachments(socialNetwork, d._id)));
         var allMessages = new List<ChatMessageClass>();
-        foreach (var messages in results)
+        for (var i = 0; i < dialogues.Count; i++)
         {
-            if (messages.Length > 0)
+            if (results[i] == null)
             {
-                allMessages.AddRange(messages);
+                continue;
+            }
+
+            if (results[i].Length > 0)
+            {
+                allMessages.AddRange(results[i]);
+            }
+            else if (dialogues[i].AttachmentsNew > 0)
+            {
+                dialogues[i].AttachmentsNew = 0;
+                dialogues[i].OnDialogueAttachmentsChanged.Invoke();
             }
         }
 
         return allMessages.ToArray();
     }
 
-    private static Task RequestNextDialoguePage(SocialNetworkClass socialNetwork)
+    private static async Task<bool> RequestNextDialoguePage(SocialNetworkClass socialNetwork)
     {
         var tcs = new TaskCompletionSource<bool>();
         socialNetwork.UpdateDialogueList(() => tcs.TrySetResult(true));
-        return tcs.Task;
+        return await Task.WhenAny(tcs.Task, Task.Delay(RequestTimeoutMs)) == tcs.Task;
     }
 
-    private static Task<ChatMessageClass[]> FetchDialogAttachments(SocialNetworkClass socialNetwork, string dialogId)
+    private static async Task<ChatMessageClass[]> FetchDialogAttachments(SocialNetworkClass socialNetwork, string dialogId)
     {
         var tcs = new TaskCompletionSource<ChatMessageClass[]>();
         socialNetwork.AllAttachmentsFromDialog(dialogId, messages => tcs.TrySetResult(messages ?? Array.Empty<ChatMessageClass>()));
-        return tcs.Task;
+        return await Task.WhenAny(tcs.Task, Task.Delay(RequestTimeoutMs)) == tcs.Task ? tcs.Task.Result : null;
     }
 }
