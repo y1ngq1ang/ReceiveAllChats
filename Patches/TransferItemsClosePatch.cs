@@ -28,11 +28,21 @@ internal sealed class TransferItemsClosePatch : ModulePatch
         }
 
         var socialNetwork = ___itemUiContext_0.Session.SocialNetwork;
-        var messagesByDialogue = ___ienumerable_0
+        var mappedMessages = ___ienumerable_0
             .Select(message => new { Message = message, Dialogue = GetDialogFromMessage(message, socialNetwork) })
+            .ToList();
+        var unmappedMessages = mappedMessages.Count(entry => entry.Dialogue == null);
+        if (unmappedMessages > 0)
+        {
+            Plugin.LogDebug($"Could not map {unmappedMessages} transferred reward message(s) back to a dialogue.");
+        }
+
+        var messagesByDialogue = mappedMessages
             .Where(entry => entry.Dialogue != null)
             .GroupBy(entry => entry.Dialogue)
             .ToList();
+
+        Plugin.LogDebug($"TransferItemsScreen closed. messages={mappedMessages.Count}, mappedDialogues={messagesByDialogue.Count}");
 
         if (messagesByDialogue.Count <= 1)
         {
@@ -57,6 +67,7 @@ internal sealed class TransferItemsClosePatch : ModulePatch
             dialogue.HasMessagesWithRewards = remaining > 0;
 
             dialogue.OnDialogueAttachmentsChanged.Invoke();
+            Plugin.LogDebug($"Updated dialogue after transfer. id={dialogue._id}, type={dialogue.Type}, remaining={remaining}");
 
             if (dialogueViews == null)
             {
@@ -88,9 +99,16 @@ internal sealed class TransferItemsClosePatch : ModulePatch
         }
         else
         {
+            Plugin.LogDebug($"Could not derive dialogue id from message. messageId={message._id}, type={message.Type}");
             return null;
         }
 
-        return socialNetwork.Dialogues.FirstOrDefault(dialogue => dialogue._id == dialogueId);
+        var dialogue = socialNetwork.Dialogues.FirstOrDefault(d => d._id == dialogueId);
+        if (dialogue == null)
+        {
+            Plugin.LogDebug($"No dialogue found for reward message. messageId={message._id}, type={message.Type}, memberId={dialogueId}");
+        }
+
+        return dialogue;
     }
 }

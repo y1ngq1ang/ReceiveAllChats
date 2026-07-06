@@ -15,6 +15,9 @@ internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
     private static readonly MethodInfo DisableHighlight =
         AccessTools.Method(typeof(ChatMessageSendBlock), "method_1");
 
+    private static readonly MethodInfo KeepHighlightAlive =
+        AccessTools.Method(typeof(ChatMessageSendBlock), "method_5");
+
     protected override MethodBase GetTargetMethod() =>
         AccessTools.Method(typeof(ChatMessageSendBlock), "method_2");
 
@@ -72,6 +75,7 @@ internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
 
         if (hasAttachments)
         {
+            KeepHighlightAlive.Invoke(block, new object[] { null });
             EnableHighlight.Invoke(block, null);
         }
         else

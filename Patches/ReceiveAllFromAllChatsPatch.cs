@@ -20,6 +20,7 @@ internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
     [PatchPrefix]
     private static bool Prefix(ChatScreen __instance, SocialNetworkClass ___socialNetworkClass)
     {
+        Plugin.LogDebug("Receive-all button clicked.");
         Collect(__instance, ___socialNetworkClass);
         return false;
     }
@@ -28,6 +29,7 @@ internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
     {
         if (_collecting)
         {
+            Plugin.LogDebug("Ignored receive-all click because collection is already running.");
             return;
         }
 
@@ -35,9 +37,15 @@ internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
         try
         {
             var messages = await AttachmentCollector.CollectAllMessages(socialNetwork);
+            Plugin.LogDebug($"Collector returned {messages.Length} reward message(s).");
             if (messages.Length > 0)
             {
+                Plugin.LogDebug("Opening transfer/reward handling screen.");
                 ProcessMessagesMethod.Invoke(chatScreen, new object[] { messages });
+            }
+            else
+            {
+                Plugin.LogDebug("No reward messages found; nothing to open.");
             }
         }
         catch (Exception exception)
