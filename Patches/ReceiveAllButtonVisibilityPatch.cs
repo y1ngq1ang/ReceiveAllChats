@@ -72,6 +72,7 @@ internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
 
         var hasAttachments = AttachmentCollector.HasPendingAttachments(socialNetwork);
         receiveAllButton.gameObject.SetActive(hasAttachments);
+        receiveAllButton.Interactable = hasAttachments && !ReceiveAllFromAllChatsPatch.IsCollecting;
 
         if (hasAttachments)
         {

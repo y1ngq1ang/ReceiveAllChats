@@ -19,6 +19,7 @@ internal sealed class TransferItemsClosePatch : ModulePatch
         return AccessTools.DeclaredMethod(typeof(TransferItemsScreen), nameof(TransferItemsScreen.Close));
     }
 
+    [HarmonyPriority(Priority.Last)]
     [PatchPostfix]
     private static async void Postfix(IEnumerable<ChatMessageClass> ___ienumerable_0, ItemUiContext ___itemUiContext_0)
     {

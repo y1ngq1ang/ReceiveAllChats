@@ -14,6 +14,8 @@ internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
 
     private static bool _collecting;
 
+    internal static bool IsCollecting => _collecting;
+
     protected override MethodBase GetTargetMethod() =>
         AccessTools.Method(typeof(ChatScreen), nameof(ChatScreen.method_3));
 

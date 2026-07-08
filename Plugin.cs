@@ -7,7 +7,7 @@ using System.IO;
 
 namespace ReceiveAllChats;
 
-[BepInPlugin("com.maschine.ReceiveAllChats", "maschine-ReceiveAllChats", "1.0.2")]
+[BepInPlugin("com.maschine.ReceiveAllChats", "maschine-ReceiveAllChats", "1.0.6")]
 public class Plugin : BaseUnityPlugin
 {
     private static readonly object DebugLogLock = new();
@@ -17,6 +17,7 @@ public class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> DebugFileLogging { get; private set; }
     internal static ConfigEntry<bool> MirrorDebugLoggingToBepInExLog { get; private set; }
     internal static ConfigEntry<int> RequestTimeoutSeconds { get; private set; }
+    internal static ConfigEntry<int> DialogueListIdleGraceMilliseconds { get; private set; }
     internal static ConfigEntry<int> MaxConcurrentAttachmentRequests { get; private set; }
     internal static string DebugLogPath { get; private set; }
 
@@ -44,6 +45,11 @@ public class Plugin : BaseUnityPlugin
             "RequestTimeoutSeconds",
             15,
             "How long to wait for each messenger request before skipping it and logging a timeout.");
+        DialogueListIdleGraceMilliseconds = Config.Bind(
+            "Advanced",
+            "DialogueListIdleGraceMilliseconds",
+            1000,
+            "How long to wait for an already-running dialogue-list update before forcing additional dialogue pages to load.");
         MaxConcurrentAttachmentRequests = Config.Bind(
             "Advanced",
             "MaxConcurrentAttachmentRequests",
@@ -54,6 +60,7 @@ public class Plugin : BaseUnityPlugin
 
         try
         {
+            new DialogueListUpdatingPatch().Enable();
             new ReceiveAllFromAllChatsPatch().Enable();
             new ReceiveAllButtonVisibilityPatch().Enable();
             new ReceiveAllButtonVisibilityPatch.OnGlobalMessagePatch().Enable();
@@ -103,7 +110,7 @@ public class Plugin : BaseUnityPlugin
         {
             var header =
                 $"ReceiveAllChats debug log started {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                $"version=1.0.2 timeoutSeconds={TimeoutMilliseconds / 1000} maxConcurrentRequests={MaxConcurrentRequests}\n";
+                $"version=1.0.6 timeoutSeconds={TimeoutMilliseconds / 1000} idleGraceMs={IdleGraceMilliseconds} maxConcurrentRequests={MaxConcurrentRequests}\n";
             File.WriteAllText(DebugLogPath, header);
             Log?.LogInfo($"ReceiveAllChats debug logging enabled: {DebugLogPath}");
         }
@@ -135,6 +142,9 @@ public class Plugin : BaseUnityPlugin
 
     internal static int TimeoutMilliseconds =>
         Math.Max(1, RequestTimeoutSeconds?.Value ?? 15) * 1000;
+
+    internal static int IdleGraceMilliseconds =>
+        Math.Max(0, DialogueListIdleGraceMilliseconds?.Value ?? 1000);
 
     internal static int MaxConcurrentRequests =>
         Math.Max(1, MaxConcurrentAttachmentRequests?.Value ?? 4);

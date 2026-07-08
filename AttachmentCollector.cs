@@ -26,23 +26,60 @@ internal static class AttachmentCollector
         var initialDialogueCount = socialNetwork.Dialogues.Count();
         Plugin.LogDebug($"Collect started. initialDialogues={initialDialogueCount}, fullyRead={socialNetwork.FullyRead}, updating={socialNetwork.MessageListUpdating}");
 
+        var forcedPageRequests = 0;
         var loadedPages = 0;
+        var noProgressPages = 0;
+        var stickyUpdating = false;
         for (var i = 0; i < 50 && !socialNetwork.FullyRead; i++)
         {
-            if (!await WaitForDialogueListIdle(socialNetwork))
+            var alreadyTreatingUpdatingAsSticky = stickyUpdating;
+            var forcedWhileUpdating = stickyUpdating && socialNetwork.MessageListUpdating;
+            if (!forcedWhileUpdating)
             {
-                Plugin.LogWarning($"ReceiveAllChats: timed out waiting for dialogue list before page {i + 1}.");
-                break;
+                var waitedForIdle = await WaitForDialogueListIdle(socialNetwork);
+                forcedWhileUpdating = !waitedForIdle && socialNetwork.MessageListUpdating;
             }
 
+            if (forcedWhileUpdating)
+            {
+                stickyUpdating = true;
+                forcedPageRequests++;
+                if (alreadyTreatingUpdatingAsSticky)
+                {
+                    Plugin.LogDebug($"Dialogue list still marked updating before page {i + 1}; continuing forced page loading.");
+                }
+                else
+                {
+                    Plugin.LogWarning($"ReceiveAllChats: dialogue list still updating after {Plugin.IdleGraceMilliseconds}ms before page {i + 1}; forcing next page request.");
+                }
+            }
+
+            var beforeCount = socialNetwork.Dialogues.Count();
             if (!await RequestNextDialoguePage(socialNetwork))
             {
                 Plugin.LogWarning($"ReceiveAllChats: timed out while requesting dialogue page {i + 1}.");
                 break;
             }
 
+            var afterCount = socialNetwork.Dialogues.Count();
+            var addedDialogues = afterCount - beforeCount;
             loadedPages++;
-            Plugin.LogDebug($"Loaded dialogue page {loadedPages}. totalDialogues={socialNetwork.Dialogues.Count()}, fullyRead={socialNetwork.FullyRead}");
+            Plugin.LogDebug($"Loaded dialogue page {loadedPages}. before={beforeCount}, after={afterCount}, added={addedDialogues}, fullyRead={socialNetwork.FullyRead}, updating={socialNetwork.MessageListUpdating}, forcedWhileUpdating={forcedWhileUpdating}");
+
+            if (addedDialogues <= 0 && !socialNetwork.FullyRead)
+            {
+                noProgressPages++;
+                Plugin.LogWarning($"ReceiveAllChats: dialogue page {i + 1} completed without adding new dialogues. noProgressPages={noProgressPages}");
+                if (noProgressPages >= 2)
+                {
+                    Plugin.LogWarning("ReceiveAllChats: stopped loading dialogue pages because repeated requests made no progress.");
+                    break;
+                }
+            }
+            else
+            {
+                noProgressPages = 0;
+            }
         }
 
         var dialogues = socialNetwork.Dialogues
@@ -50,7 +87,7 @@ internal static class AttachmentCollector
             .ToList();
 
         var flaggedDialogues = dialogues.Count(d => d.AttachmentsNew > 0 || d.HasMessagesWithRewards);
-        Plugin.LogDebug($"Scanning dialogues. totalNonGlobal={dialogues.Count}, flagged={flaggedDialogues}, maxConcurrent={Plugin.MaxConcurrentRequests}, timeoutMs={Plugin.TimeoutMilliseconds}");
+        Plugin.LogDebug($"Scanning dialogues. totalNonGlobal={dialogues.Count}, flagged={flaggedDialogues}, fullyRead={socialNetwork.FullyRead}, updating={socialNetwork.MessageListUpdating}, loadedPages={loadedPages}, forcedPageRequests={forcedPageRequests}, maxConcurrent={Plugin.MaxConcurrentRequests}, timeoutMs={Plugin.TimeoutMilliseconds}");
 
         var results = new ChatMessageClass[dialogues.Count][];
         using (var semaphore = new SemaphoreSlim(Plugin.MaxConcurrentRequests))
@@ -99,21 +136,32 @@ internal static class AttachmentCollector
             }
         }
 
-        Plugin.LogDebug($"Collect finished. messages={allMessages.Count}, dialoguesWithRewards={dialoguesWithRewards}, timedOutRequests={timedOutRequests}, staleCounters={staleCounters}, elapsedMs={stopwatch.ElapsedMilliseconds}");
+        Plugin.LogDebug($"Collect finished. messages={allMessages.Count}, scannedDialogues={dialogues.Count}, dialoguesWithRewards={dialoguesWithRewards}, timedOutRequests={timedOutRequests}, staleCounters={staleCounters}, fullyRead={socialNetwork.FullyRead}, forcedPageRequests={forcedPageRequests}, elapsedMs={stopwatch.ElapsedMilliseconds}");
         return allMessages.ToArray();
     }
 
     private static async Task<bool> WaitForDialogueListIdle(SocialNetworkClass socialNetwork)
     {
-        var timeout = Task.Delay(Plugin.TimeoutMilliseconds);
+        if (!socialNetwork.MessageListUpdating)
+        {
+            return true;
+        }
+
+        var idleGrace = Plugin.IdleGraceMilliseconds;
+        if (idleGrace <= 0)
+        {
+            return false;
+        }
+
+        var timeout = Task.Delay(idleGrace);
         while (socialNetwork.MessageListUpdating)
         {
-            var yield = Task.Yield();
-            await yield;
             if (timeout.IsCompleted)
             {
                 return false;
             }
+
+            await Task.Delay(50);
         }
 
         return true;
