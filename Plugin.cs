@@ -7,9 +7,10 @@ using System.IO;
 
 namespace ReceiveAllChats;
 
-[BepInPlugin("com.maschine.ReceiveAllChats", "maschine-ReceiveAllChats", "1.0.6")]
+[BepInPlugin("com.maschine.ReceiveAllChats", "maschine-ReceiveAllChats", "1.0.4")]
 public class Plugin : BaseUnityPlugin
 {
+    private const string Version = "1.0.4";
     private static readonly object DebugLogLock = new();
 
     internal static ManualLogSource Log { get; private set; }
@@ -28,33 +29,33 @@ public class Plugin : BaseUnityPlugin
         DebugLogging = Config.Bind(
             "Debug",
             "EnableDebugLogging",
-            true,
-            "Legacy debug toggle. Keep enabled unless asked otherwise.");
+            false,
+            AdvancedDescription("Enable detailed receive-all diagnostics. Disabled by default for release builds."));
         DebugFileLogging = Config.Bind(
             "Debug",
             "EnableDebugFileLogging",
-            true,
-            "Write detailed receive-all diagnostics to a separate ReceiveAllChats-debug.log file.");
+            false,
+            AdvancedDescription("Write detailed diagnostics to a separate ReceiveAllChats-debug.log file when debug logging is enabled."));
         MirrorDebugLoggingToBepInExLog = Config.Bind(
             "Debug",
             "MirrorDebugLoggingToBepInExLog",
             false,
-            "Also write debug diagnostics to the main BepInEx log. Usually not needed when sharing the separate debug file.");
+            AdvancedDescription("Also write debug diagnostics to the main BepInEx log. Usually not needed when sharing the separate debug file."));
         RequestTimeoutSeconds = Config.Bind(
-            "Advanced",
+            "Debug",
             "RequestTimeoutSeconds",
             15,
-            "How long to wait for each messenger request before skipping it and logging a timeout.");
+            AdvancedDescription("How long to wait for each messenger request before skipping it and logging a timeout."));
         DialogueListIdleGraceMilliseconds = Config.Bind(
-            "Advanced",
+            "Debug",
             "DialogueListIdleGraceMilliseconds",
-            1000,
-            "How long to wait for an already-running dialogue-list update before forcing additional dialogue pages to load.");
+            250,
+            AdvancedDescription("How long to wait for an already-running dialogue-list update before forcing additional dialogue pages to load."));
         MaxConcurrentAttachmentRequests = Config.Bind(
-            "Advanced",
+            "Debug",
             "MaxConcurrentAttachmentRequests",
             4,
-            "Maximum number of attachment requests sent at the same time. Lower values are slower but more reliable.");
+            AdvancedDescription("Maximum number of attachment requests sent at the same time. Lower values are slower but more reliable."));
 
         StartDebugLog();
 
@@ -75,33 +76,35 @@ public class Plugin : BaseUnityPlugin
 
     internal static void LogDebug(string message)
     {
-        if (DebugLogging?.Value == true)
+        if (DebugLogging?.Value != true)
         {
-            if (DebugFileLogging?.Value == true)
-            {
-                WriteDebugFile($"DEBUG {message}");
-            }
-
-            if (MirrorDebugLoggingToBepInExLog?.Value == true)
-            {
-                Log?.LogInfo($"[Debug] {message}");
-            }
+            return;
         }
-        else if (DebugFileLogging?.Value == true)
+
+        if (DebugFileLogging?.Value == true)
         {
             WriteDebugFile($"DEBUG {message}");
+        }
+
+        if (MirrorDebugLoggingToBepInExLog?.Value == true)
+        {
+            Log?.LogInfo($"[Debug] {message}");
         }
     }
 
     internal static void LogWarning(string message)
     {
-        WriteDebugFile($"WARN  {message}");
+        if (DebugLogging?.Value == true && DebugFileLogging?.Value == true)
+        {
+            WriteDebugFile($"WARN  {message}");
+        }
+
         Log?.LogWarning(message);
     }
 
     private static void StartDebugLog()
     {
-        if (DebugFileLogging?.Value != true)
+        if (DebugLogging?.Value != true || DebugFileLogging?.Value != true)
         {
             return;
         }
@@ -110,7 +113,7 @@ public class Plugin : BaseUnityPlugin
         {
             var header =
                 $"ReceiveAllChats debug log started {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                $"version=1.0.6 timeoutSeconds={TimeoutMilliseconds / 1000} idleGraceMs={IdleGraceMilliseconds} maxConcurrentRequests={MaxConcurrentRequests}\n";
+                $"version={Version} timeoutSeconds={TimeoutMilliseconds / 1000} idleGraceMs={IdleGraceMilliseconds} maxConcurrentRequests={MaxConcurrentRequests}\n";
             File.WriteAllText(DebugLogPath, header);
             Log?.LogInfo($"ReceiveAllChats debug logging enabled: {DebugLogPath}");
         }
@@ -144,8 +147,11 @@ public class Plugin : BaseUnityPlugin
         Math.Max(1, RequestTimeoutSeconds?.Value ?? 15) * 1000;
 
     internal static int IdleGraceMilliseconds =>
-        Math.Max(0, DialogueListIdleGraceMilliseconds?.Value ?? 1000);
+        Math.Max(0, DialogueListIdleGraceMilliseconds?.Value ?? 250);
 
     internal static int MaxConcurrentRequests =>
         Math.Max(1, MaxConcurrentAttachmentRequests?.Value ?? 4);
+
+    private static ConfigDescription AdvancedDescription(string description) =>
+        new(description, null, new ConfigurationManagerAttributes { IsAdvanced = true });
 }

@@ -7,7 +7,7 @@
     <Authors>maschine</Authors>
     <Company>https://github.com/maschine34675/ReceiveAllChats</Company>
     <AssemblyName>maschine-ReceiveAllChats</AssemblyName>
-    <AssemblyVersion>1.0.6</AssemblyVersion>
+    <AssemblyVersion>1.0.4</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <Version>$(AssemblyVersion)</Version>
     <LangVersion>latest</LangVersion>
@@ -27,6 +27,10 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="ReceiveAllChats.DebugServer\**\*.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="0Harmony">
@@ -67,7 +71,7 @@
     </Reference>
   </ItemGroup>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(DeployOnBuild)' != 'false'">
     <Exec Command="copy &quot;$(TargetPath)&quot; &quot;$(ProjectDir)\..\..\BepInEx\plugins\$(TargetFileName)&quot;" />
   </Target>
 
