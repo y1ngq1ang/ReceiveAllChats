@@ -7,7 +7,7 @@
     <Authors>maschine</Authors>
     <Company>https://github.com/maschine34675/ReceiveAllChats</Company>
     <AssemblyName>maschine-ReceiveAllChats</AssemblyName>
-    <AssemblyVersion>1.0.4</AssemblyVersion>
+    <AssemblyVersion>1.1.0</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <Version>$(AssemblyVersion)</Version>
     <LangVersion>latest</LangVersion>
@@ -29,50 +29,50 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="ReceiveAllChats.DebugServer\**\*.cs" />
+    <Compile Include="..\ReceiveAllChats.Shared\ReceiveAllChatsProtocol.cs" Link="ReceiveAllChatsProtocol.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>..\..\BepInEx\core\0Harmony.dll</HintPath>
+      <HintPath>..\..\..\BepInEx\core\0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="spt-reflection">
-      <HintPath>..\..\BepInEx\plugins\spt\spt-reflection.dll</HintPath>
+      <HintPath>..\..\..\BepInEx\plugins\spt\spt-reflection.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
     <Reference Include="BepInEx">
-      <HintPath>..\..\BepInEx\core\BepInEx.dll</HintPath>
+      <HintPath>..\..\..\BepInEx\core\BepInEx.dll</HintPath>
     </Reference>
     <Reference Include="Comfort">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\Comfort.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\Comfort.dll</HintPath>
     </Reference>
     <Reference Include="Comfort.Unity">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\Comfort.Unity.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\Comfort.Unity.dll</HintPath>
     </Reference>
     <Reference Include="Sirenix.Serialization">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\Sirenix.Serialization.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\Sirenix.Serialization.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\Unity.TextMeshPro.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\UnityEngine.UI.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      <HintPath>..\..\..\EscapeFromTarkov_Data\Managed\UnityEngine.UIModule.dll</HintPath>
     </Reference>
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(DeployOnBuild)' != 'false'">
-    <Exec Command="copy &quot;$(TargetPath)&quot; &quot;$(ProjectDir)\..\..\BepInEx\plugins\$(TargetFileName)&quot;" />
+    <Exec Command="copy &quot;$(TargetPath)&quot; &quot;$(ProjectDir)..\..\..\BepInEx\plugins\$(TargetFileName)&quot;" />
   </Target>
 
 </Project>

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>ReceiveAllChats.Server</RootNamespace>
+    <AssemblyName>maschine-ReceiveAllChats.Server</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Library</OutputType>
+    <Version>1.1.0</Version>
+    <OutputPath>bin\$(Configuration)\$(AssemblyName)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <SptModName>ReceiveAllChats</SptModName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ReceiveAllChats.Shared\ReceiveAllChatsProtocol.cs" Link="ReceiveAllChatsProtocol.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SPTarkov.Common" Version="4.0.9" />
+    <PackageReference Include="SPTarkov.DI" Version="4.0.9" />
+    <PackageReference Include="SPTarkov.Reflection" Version="4.0.9" />
+    <PackageReference Include="SPTarkov.Server.Core" Version="4.0.9" />
+  </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(DeployOnBuild)' != 'false'">
+    <Exec Command="if not exist &quot;C:\SPT\SPT\user\mods\$(SptModName)&quot; mkdir &quot;C:\SPT\SPT\user\mods\$(SptModName)&quot;&#xD;&#xA;copy &quot;$(TargetPath)&quot; &quot;C:\SPT\SPT\user\mods\$(SptModName)\$(TargetFileName)&quot;" />
+  </Target>
+
+</Project>

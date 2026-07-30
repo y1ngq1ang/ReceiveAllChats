@@ -2,15 +2,16 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using ReceiveAllChats.Patches;
+using ReceiveAllChats.Shared;
 using System;
 using System.IO;
 
 namespace ReceiveAllChats;
 
-[BepInPlugin("com.maschine.ReceiveAllChats", "maschine-ReceiveAllChats", "1.0.4")]
+[BepInPlugin(ReceiveAllChatsProtocol.ModGuid, ReceiveAllChatsProtocol.PluginName, ReceiveAllChatsProtocol.Version)]
 public class Plugin : BaseUnityPlugin
 {
-    private const string Version = "1.0.4";
+    private const string Version = ReceiveAllChatsProtocol.Version;
     private static readonly object DebugLogLock = new();
 
     internal static ManualLogSource Log { get; private set; }
@@ -18,8 +19,8 @@ public class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> DebugFileLogging { get; private set; }
     internal static ConfigEntry<bool> MirrorDebugLoggingToBepInExLog { get; private set; }
     internal static ConfigEntry<int> RequestTimeoutSeconds { get; private set; }
-    internal static ConfigEntry<int> DialogueListIdleGraceMilliseconds { get; private set; }
     internal static ConfigEntry<int> MaxConcurrentAttachmentRequests { get; private set; }
+    internal static ConfigEntry<bool> UseServerAggregationRequest { get; private set; }
     internal static string DebugLogPath { get; private set; }
 
     private void Awake()
@@ -46,16 +47,16 @@ public class Plugin : BaseUnityPlugin
             "RequestTimeoutSeconds",
             15,
             AdvancedDescription("How long to wait for each messenger request before skipping it and logging a timeout."));
-        DialogueListIdleGraceMilliseconds = Config.Bind(
-            "Debug",
-            "DialogueListIdleGraceMilliseconds",
-            250,
-            AdvancedDescription("How long to wait for an already-running dialogue-list update before forcing additional dialogue pages to load."));
         MaxConcurrentAttachmentRequests = Config.Bind(
             "Debug",
             "MaxConcurrentAttachmentRequests",
             4,
             AdvancedDescription("Maximum number of attachment requests sent at the same time. Lower values are slower but more reliable."));
+        UseServerAggregationRequest = Config.Bind(
+            "Debug",
+            "UseServerAggregationRequest",
+            true,
+            AdvancedDescription("Ask the optional ReceiveAllChats.Server mod for all attachments in a single request. Falls back to per-dialogue scanning when the server mod is not installed."));
 
         StartDebugLog();
 
@@ -113,7 +114,7 @@ public class Plugin : BaseUnityPlugin
         {
             var header =
                 $"ReceiveAllChats debug log started {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                $"version={Version} timeoutSeconds={TimeoutMilliseconds / 1000} idleGraceMs={IdleGraceMilliseconds} maxConcurrentRequests={MaxConcurrentRequests}\n";
+                $"version={Version} timeoutSeconds={TimeoutMilliseconds / 1000} maxConcurrentRequests={MaxConcurrentRequests}\n";
             File.WriteAllText(DebugLogPath, header);
             Log?.LogInfo($"ReceiveAllChats debug logging enabled: {DebugLogPath}");
         }
@@ -146,11 +147,11 @@ public class Plugin : BaseUnityPlugin
     internal static int TimeoutMilliseconds =>
         Math.Max(1, RequestTimeoutSeconds?.Value ?? 15) * 1000;
 
-    internal static int IdleGraceMilliseconds =>
-        Math.Max(0, DialogueListIdleGraceMilliseconds?.Value ?? 250);
-
     internal static int MaxConcurrentRequests =>
         Math.Max(1, MaxConcurrentAttachmentRequests?.Value ?? 4);
+
+    internal static bool UseServerAggregation =>
+        UseServerAggregationRequest?.Value != false;
 
     private static ConfigDescription AdvancedDescription(string description) =>
         new(description, null, new ConfigurationManagerAttributes { IsAdvanced = true });

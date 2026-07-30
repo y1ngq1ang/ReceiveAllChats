@@ -25,14 +25,11 @@ internal sealed class DialogueListUpdatingPatch : ModulePatch
             }
             finally
             {
-                if (__instance?.MessageListUpdating == true)
+                if (ReceiveAllFromAllChatsPatch.IsCollecting && __instance?.MessageListUpdating == true)
                 {
                     __instance.MessageListUpdating = false;
                     var totalCleared = Interlocked.Increment(ref _clearedUpdatingCallbacks);
-                    if (totalCleared == 1 || totalCleared % 50 == 0)
-                    {
-                        Plugin.LogDebug($"Cleared dialogue list updating flag after UpdateDialogueList callback. totalCleared={totalCleared}");
-                    }
+                    Plugin.LogDebug($"Cleared dialogue list updating flag after UpdateDialogueList callback. totalCleared={totalCleared}");
                 }
             }
         };
