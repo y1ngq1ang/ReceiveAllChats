@@ -6,8 +6,11 @@
     <Nullable>disable</Nullable>
     <Authors>maschine</Authors>
     <Company>https://github.com/maschine34675/ReceiveAllChats</Company>
+    <!-- Deliberate deviation from the maschine-<Name>.Client.dll convention: this
+         assembly name shipped with 1.0.4 and renaming it would leave the old DLL
+         behind in existing installs (double-load). Rename only with a migration note. -->
     <AssemblyName>maschine-ReceiveAllChats</AssemblyName>
-    <AssemblyVersion>1.1.0</AssemblyVersion>
+    <AssemblyVersion>2.0.0</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <Version>$(AssemblyVersion)</Version>
     <LangVersion>latest</LangVersion>

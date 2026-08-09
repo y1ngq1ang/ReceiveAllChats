@@ -4,30 +4,31 @@ using SPT.Reflection.Patching;
 using System;
 using System.Reflection;
 using UnityEngine;
+using EFT;
 
 namespace ReceiveAllChats.Patches;
 
 internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
 {
     private static readonly MethodInfo ProcessMessagesMethod =
-        AccessTools.Method(typeof(ChatScreen), "method_17");
+        AccessTools.Method(typeof(ChatScreen), "CG_TransferAll");
 
     private static bool _collecting;
 
     internal static bool IsCollecting => _collecting;
 
     protected override MethodBase GetTargetMethod() =>
-        AccessTools.Method(typeof(ChatScreen), nameof(ChatScreen.method_3));
+        AccessTools.Method(typeof(ChatScreen), nameof(ChatScreen.TransferAll));
 
     [PatchPrefix]
-    private static bool Prefix(ChatScreen __instance, SocialNetworkClass ___socialNetworkClass)
+    private static bool Prefix(ChatScreen __instance, SocialNetwork ____social)
     {
         Plugin.LogDebug("Receive-all button clicked.");
-        Collect(__instance, ___socialNetworkClass);
+        Collect(__instance, ____social);
         return false;
     }
 
-    private static async void Collect(ChatScreen chatScreen, SocialNetworkClass socialNetwork)
+    private static async void Collect(ChatScreen chatScreen, SocialNetwork socialNetwork)
     {
         if (_collecting)
         {

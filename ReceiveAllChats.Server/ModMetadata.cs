@@ -3,19 +3,17 @@ using SPTarkov.Server.Core.Models.Spt.Mod;
 
 namespace ReceiveAllChats.Server;
 
-public record ModMetadata : AbstractModMetadata
+public record ModMetadata : IModMetadata
 {
-    public override string ModGuid { get; init; } = ReceiveAllChatsProtocol.ModGuid;
-    public override string Name { get; init; } = ReceiveAllChatsProtocol.ModName;
-    public override string Author { get; init; } = "maschine";
-    public override List<string>? Contributors { get; init; }
-    public override SemanticVersioning.Version Version { get; init; } = new(ReceiveAllChatsProtocol.Version);
-    public override SemanticVersioning.Range SptVersion { get; init; } = new($"~{ReceiveAllChatsProtocol.SptVersion}");
-    public override List<string>? Incompatibilities { get; init; }
-    public override Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
-    public override string? Url { get; init; } = "https://github.com/maschine34675/ReceiveAllChats";
-#pragma warning disable CS8764
-    public override bool? IsBundleMod { get; init; } = false;
-#pragma warning restore CS8764
-    public override string License { get; init; } = "MIT";
+    public string ModGuid { get; init; } = ReceiveAllChatsProtocol.ModGuid;
+    public string Name { get; init; } = ReceiveAllChatsProtocol.ModName;
+    public string Author { get; init; } = "maschine";
+    public List<string>? Contributors { get; init; }
+    public SemanticVersioning.Version Version { get; init; } = new(ReceiveAllChatsProtocol.Version);
+    public SemanticVersioning.Range SptVersion { get; init; } = new($"~{ReceiveAllChatsProtocol.SptVersion}");
+    public bool HasPrepatcher { get; init; } = false;
+    public List<string>? Incompatibilities { get; init; }
+    public Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
+    public string? Url { get; init; } = "https://github.com/maschine34675/ReceiveAllChats";
+    public string License { get; init; } = "MIT";
 }

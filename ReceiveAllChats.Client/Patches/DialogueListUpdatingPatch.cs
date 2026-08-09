@@ -3,6 +3,7 @@ using SPT.Reflection.Patching;
 using System;
 using System.Reflection;
 using System.Threading;
+using EFT;
 
 namespace ReceiveAllChats.Patches;
 
@@ -11,10 +12,10 @@ internal sealed class DialogueListUpdatingPatch : ModulePatch
     private static int _clearedUpdatingCallbacks;
 
     protected override MethodBase GetTargetMethod() =>
-        AccessTools.Method(typeof(SocialNetworkClass), nameof(SocialNetworkClass.UpdateDialogueList));
+        AccessTools.Method(typeof(SocialNetwork), nameof(SocialNetwork.UpdateDialogueList));
 
     [PatchPrefix]
-    private static void Prefix(SocialNetworkClass __instance, ref Action callback)
+    private static void Prefix(SocialNetwork __instance, ref Action callback)
     {
         var originalCallback = callback;
         callback = () =>

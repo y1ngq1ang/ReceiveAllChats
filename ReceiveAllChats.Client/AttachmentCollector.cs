@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EFT;
 
 namespace ReceiveAllChats;
 
@@ -14,16 +15,16 @@ internal static class AttachmentCollector
 {
     private const string ServerAggregationRoute = ReceiveAllChatsProtocol.GetAllAttachmentsRoute;
 
-    public static bool HasPendingAttachments(SocialNetworkClass socialNetwork) =>
+    public static bool HasPendingAttachments(SocialNetwork socialNetwork) =>
         socialNetwork.Dialogues.Any(d =>
             d.Type != EMessageType.GlobalChat && (d.AttachmentsNew > 0 || d.HasMessagesWithRewards));
 
-    public static async Task<ChatMessageClass[]> CollectAllMessages(SocialNetworkClass socialNetwork)
+    public static async Task<DialogueChatMessage[]> CollectAllMessages(SocialNetwork socialNetwork)
     {
         if (socialNetwork == null)
         {
             Plugin.LogWarning("ReceiveAllChats: social network was null while collecting attachments.");
-            return Array.Empty<ChatMessageClass>();
+            return Array.Empty<DialogueChatMessage>();
         }
 
         var stopwatch = Stopwatch.StartNew();
@@ -57,7 +58,7 @@ internal static class AttachmentCollector
         var flaggedDialogues = dialogues.Count(d => d.AttachmentsNew > 0 || d.HasMessagesWithRewards);
         Plugin.LogDebug($"Scanning dialogues. totalNonGlobal={dialogues.Count}, flagged={flaggedDialogues}, fullyRead={socialNetwork.FullyRead}, updating={socialNetwork.MessageListUpdating}, maxConcurrent={Plugin.MaxConcurrentRequests}, timeoutMs={Plugin.TimeoutMilliseconds}");
 
-        var results = new ChatMessageClass[dialogues.Count][];
+        var results = new DialogueChatMessage[dialogues.Count][];
         using (var semaphore = new SemaphoreSlim(Plugin.MaxConcurrentRequests))
         {
             var tasks = dialogues.Select(async (dialogue, index) =>
@@ -76,7 +77,7 @@ internal static class AttachmentCollector
             await Task.WhenAll(tasks);
         }
 
-        var allMessages = new List<ChatMessageClass>();
+        var allMessages = new List<DialogueChatMessage>();
         var timedOutRequests = 0;
         var dialoguesWithRewards = 0;
         var staleCounters = 0;
@@ -108,7 +109,7 @@ internal static class AttachmentCollector
         return allMessages.ToArray();
     }
 
-    private static async Task<ChatMessageClass[]> TryCollectFromServer(SocialNetworkClass socialNetwork)
+    private static async Task<DialogueChatMessage[]> TryCollectFromServer(SocialNetwork socialNetwork)
     {
         if (!Plugin.UseServerAggregation)
         {
@@ -116,24 +117,24 @@ internal static class AttachmentCollector
             return null;
         }
 
-        if (!(socialNetwork.IChatInteractions is ProfileEndpointFactoryAbstractClass session))
+        if (!(socialNetwork._session is ClientBackendSession session))
         {
-            Plugin.LogDebug($"Session does not expose the backend request pipeline. sessionType={socialNetwork.IChatInteractions?.GetType().Name ?? "null"}");
+            Plugin.LogDebug($"Session does not expose the backend request pipeline. sessionType={socialNetwork._session?.GetType().Name ?? "null"}");
             return null;
         }
 
-        var request = new LegacyParamsStruct
+        var request = new SendRequest
         {
-            Url = session.Gclass1392_0.Messaging + ServerAggregationRoute,
-            Params = new Class35<string>("all"),
-            Retries = LegacyParamsStruct.NoRetries,
+            Url = session._backendUrls.Messaging + ServerAggregationRoute,
+            Params = new DialogRequestParams<string>("all"),
+            Retries = SendRequest.NoRetries,
             HandlingMode = ERequestHandlingMode.Ignore,
         };
 
-        var tcs = new TaskCompletionSource<ChatMessageClass[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<DialogueChatMessage[]>(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
-            var requestTask = session.method_5(request, new Callback<GClass1061>(result =>
+            var requestTask = session.method_5(request, new Callback<ChatMessagesList>(result =>
             {
                 if (!result.Succeed)
                 {
@@ -142,7 +143,7 @@ internal static class AttachmentCollector
                     return;
                 }
 
-                tcs.TrySetResult(result.Value?.messages ?? Array.Empty<ChatMessageClass>());
+                tcs.TrySetResult(result.Value?.messages ?? Array.Empty<DialogueChatMessage>());
             }));
             _ = requestTask.ContinueWith(task =>
             {
@@ -169,7 +170,7 @@ internal static class AttachmentCollector
         return tcs.Task.Result;
     }
 
-    private static void ApplyServerResult(SocialNetworkClass socialNetwork, ChatMessageClass[] messages)
+    private static void ApplyServerResult(SocialNetwork socialNetwork, DialogueChatMessage[] messages)
     {
         var rewardDialogueIds = new HashSet<string>(messages
             .Select(message => GetDialogueIdFromMessage(message, socialNetwork))
@@ -199,7 +200,7 @@ internal static class AttachmentCollector
         }
     }
 
-    private static string GetDialogueIdFromMessage(ChatMessageClass message, SocialNetworkClass socialNetwork)
+    private static string GetDialogueIdFromMessage(DialogueChatMessage message, SocialNetwork socialNetwork)
     {
         if (message.Member != null)
         {
@@ -214,18 +215,18 @@ internal static class AttachmentCollector
         return null;
     }
 
-    private static async Task<bool> RequestNextDialoguePage(SocialNetworkClass socialNetwork)
+    private static async Task<bool> RequestNextDialoguePage(SocialNetwork socialNetwork)
     {
         var tcs = new TaskCompletionSource<bool>();
         socialNetwork.UpdateDialogueList(() => tcs.TrySetResult(true));
         return await Task.WhenAny(tcs.Task, Task.Delay(Plugin.TimeoutMilliseconds)) == tcs.Task;
     }
 
-    private static async Task<ChatMessageClass[]> FetchDialogAttachments(SocialNetworkClass socialNetwork, DialogueClass dialogue)
+    private static async Task<DialogueChatMessage[]> FetchDialogAttachments(SocialNetwork socialNetwork, UpdatableChatDialogue dialogue)
     {
         var dialogId = dialogue._id;
-        var tcs = new TaskCompletionSource<ChatMessageClass[]>();
-        socialNetwork.AllAttachmentsFromDialog(dialogId, messages => tcs.TrySetResult(messages ?? Array.Empty<ChatMessageClass>()));
+        var tcs = new TaskCompletionSource<DialogueChatMessage[]>();
+        socialNetwork.AllAttachmentsFromDialog(dialogId, messages => tcs.TrySetResult(messages ?? Array.Empty<DialogueChatMessage>()));
         var completed = await Task.WhenAny(tcs.Task, Task.Delay(Plugin.TimeoutMilliseconds)) == tcs.Task;
         if (!completed)
         {

@@ -4,45 +4,47 @@ using HarmonyLib;
 using SPT.Reflection.Patching;
 using System.Collections.Generic;
 using System.Reflection;
+using EFT;
+using ChatShared;
 
 namespace ReceiveAllChats.Patches;
 
 internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
 {
     private static readonly MethodInfo EnableHighlight =
-        AccessTools.Method(typeof(ChatMessageSendBlock), "method_0");
+        AccessTools.Method(typeof(ChatMessageSendBlock), "EnableBlock");
 
     private static readonly MethodInfo DisableHighlight =
-        AccessTools.Method(typeof(ChatMessageSendBlock), "method_1");
+        AccessTools.Method(typeof(ChatMessageSendBlock), "DisableBlock");
 
     private static readonly MethodInfo KeepHighlightAlive =
-        AccessTools.Method(typeof(ChatMessageSendBlock), "method_5");
+        AccessTools.Method(typeof(ChatMessageSendBlock), "CalculateEndStorageTime");
 
     protected override MethodBase GetTargetMethod() =>
-        AccessTools.Method(typeof(ChatMessageSendBlock), "method_2");
+        AccessTools.Method(typeof(ChatMessageSendBlock), "UpdateRewards");
 
     [PatchPostfix]
     private static void Postfix(
         ChatMessageSendBlock __instance,
-        SocialNetworkClass ___socialNetworkClass,
+        SocialNetwork ___socialNetwork,
         DefaultUIButton ____receiveAllButton) =>
-        Apply(__instance, ___socialNetworkClass, ____receiveAllButton);
+        Apply(__instance, ___socialNetwork, ____receiveAllButton);
 
     internal sealed class OnGlobalMessagePatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod() =>
-            AccessTools.Method(typeof(ChatMessageSendBlock), nameof(ChatMessageSendBlock.method_4));
+            AccessTools.Method(typeof(ChatMessageSendBlock), nameof(ChatMessageSendBlock.LastMessageUpdatedHandler));
 
         [PatchPostfix]
         private static void Postfix(
             ChatMessageSendBlock __instance,
-            SocialNetworkClass ___socialNetworkClass,
+            SocialNetwork ___socialNetwork,
             DefaultUIButton ____receiveAllButton,
-            KeyValuePair<DialogueClass, ChatMessageClass> dialogue)
+            KeyValuePair<UpdatableChatDialogue, DialogueChatMessage> dialogue)
         {
             if (dialogue.Value.HasRewards)
             {
-                Apply(__instance, ___socialNetworkClass, ____receiveAllButton);
+                Apply(__instance, ___socialNetwork, ____receiveAllButton);
             }
         }
     }
@@ -55,14 +57,14 @@ internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
         [PatchPostfix]
         private static void Postfix(
             ChatMessageSendBlock __instance,
-            SocialNetworkClass ___socialNetworkClass,
+            SocialNetwork ___socialNetwork,
             DefaultUIButton ____receiveAllButton) =>
-            Apply(__instance, ___socialNetworkClass, ____receiveAllButton);
+            Apply(__instance, ___socialNetwork, ____receiveAllButton);
     }
 
     private static void Apply(
         ChatMessageSendBlock block,
-        SocialNetworkClass socialNetwork,
+        SocialNetwork socialNetwork,
         DefaultUIButton receiveAllButton)
     {
         if (socialNetwork == null || receiveAllButton == null)

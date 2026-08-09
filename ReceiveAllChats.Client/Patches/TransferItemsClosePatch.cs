@@ -6,6 +6,7 @@ using SPT.Reflection.Patching;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using EFT;
 
 namespace ReceiveAllChats.Patches;
 
@@ -15,21 +16,21 @@ internal sealed class TransferItemsClosePatch : ModulePatch
 
     protected override MethodBase GetTargetMethod()
     {
-        _dialogueViewDialogueField = AccessTools.Field(typeof(DialogueView), "dialogueClass");
+        _dialogueViewDialogueField = AccessTools.Field(typeof(DialogueView), "_dialogue");
         return AccessTools.DeclaredMethod(typeof(TransferItemsScreen), nameof(TransferItemsScreen.Close));
     }
 
     [HarmonyPriority(Priority.Last)]
     [PatchPostfix]
-    private static async void Postfix(IEnumerable<ChatMessageClass> ___ienumerable_0, ItemUiContext ___itemUiContext_0)
+    private static async void Postfix(IEnumerable<DialogueChatMessage> ____messages, ItemUiContext ____itemUiContext)
     {
-        if (___ienumerable_0 == null || !___ienumerable_0.Any())
+        if (____messages == null || !____messages.Any())
         {
             return;
         }
 
-        var socialNetwork = ___itemUiContext_0.Session.SocialNetwork;
-        var mappedMessages = ___ienumerable_0
+        var socialNetwork = ____itemUiContext.Session.SocialNetwork;
+        var mappedMessages = ____messages
             .Select(message => new { Message = message, Dialogue = GetDialogFromMessage(message, socialNetwork) })
             .ToList();
         var unmappedMessages = mappedMessages.Count(entry => entry.Dialogue == null);
@@ -50,7 +51,7 @@ internal sealed class TransferItemsClosePatch : ModulePatch
             return;
         }
 
-        await ___itemUiContext_0.ClientSession.FlushOperationQueue();
+        await ____itemUiContext.ClientSession.FlushOperationQueue();
 
         var dialoguesContainerField = AccessTools.Field(typeof(ChatScreen), "_dialoguesContainer");
         var chatScreen = MonoBehaviourSingleton<CommonUI>.Instance?.ChatScreen;
@@ -80,14 +81,14 @@ internal sealed class TransferItemsClosePatch : ModulePatch
 
             if (dialogueView != null)
             {
-                dialogueView.Int32_1 = dialogue.AttachmentsNew;
+                dialogueView.NewAttachmentsMessagesCount = dialogue.AttachmentsNew;
             }
         }
 
-        MonoBehaviourSingleton<PreloaderUI>.Instance.MenuTaskBar.method_12();
+        MonoBehaviourSingleton<PreloaderUI>.Instance.MenuTaskBar.SetNewMessagesCount();
     }
 
-    private static DialogueClass GetDialogFromMessage(ChatMessageClass message, SocialNetworkClass socialNetwork)
+    private static UpdatableChatDialogue GetDialogFromMessage(DialogueChatMessage message, SocialNetwork socialNetwork)
     {
         string dialogueId;
         if (message.Member != null)
