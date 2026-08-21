@@ -6,6 +6,7 @@ using SPT.Reflection.Patching;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using EFT;
 
 namespace ReceiveAllChats.Patches;
@@ -30,13 +31,23 @@ internal sealed class TransferItemsClosePatch : ModulePatch
         }
 
         var socialNetwork = ____itemUiContext.Session.SocialNetwork;
-        var mappedMessages = ____messages
+        var transferredMessages = ____messages.ToList();
+        var snapshot = ReceiveAllFromAllChatsPatch.LastCollectedMessages;
+        var snapshotIds = snapshot == null ? null : new HashSet<string>(snapshot.Select(message => message._id));
+        var isOwnTransfer = snapshotIds != null && transferredMessages.All(message => snapshotIds.Contains(message._id));
+        if (isOwnTransfer)
+        {
+            ReceiveAllFromAllChatsPatch.ConsumeLastCollectedMessages();
+        }
+
+        var countedMessages = isOwnTransfer ? snapshot : transferredMessages;
+        var mappedMessages = countedMessages
             .Select(message => new { Message = message, Dialogue = GetDialogFromMessage(message, socialNetwork) })
             .ToList();
         var unmappedMessages = mappedMessages.Count(entry => entry.Dialogue == null);
         if (unmappedMessages > 0)
         {
-            Plugin.LogDebug($"Could not map {unmappedMessages} transferred reward message(s) back to a dialogue.");
+            Plugin.LogDebug($"Could not map {unmappedMessages} reward message(s) back to a dialogue.");
         }
 
         var messagesByDialogue = mappedMessages
@@ -44,14 +55,15 @@ internal sealed class TransferItemsClosePatch : ModulePatch
             .GroupBy(entry => entry.Dialogue)
             .ToList();
 
-        Plugin.LogDebug($"TransferItemsScreen closed. messages={mappedMessages.Count}, mappedDialogues={messagesByDialogue.Count}");
+        Plugin.LogDebug($"TransferItemsScreen closed. transferred={transferredMessages.Count}, ownTransfer={isOwnTransfer}, countedMessages={mappedMessages.Count}, mappedDialogues={messagesByDialogue.Count}");
 
-        if (messagesByDialogue.Count <= 1)
+        if (!isOwnTransfer && messagesByDialogue.Count <= 1)
         {
             return;
         }
 
         await ____itemUiContext.ClientSession.FlushOperationQueue();
+        await Task.Yield();
 
         var dialoguesContainerField = AccessTools.Field(typeof(ChatScreen), "_dialoguesContainer");
         var chatScreen = MonoBehaviourSingleton<CommonUI>.Instance?.ChatScreen;

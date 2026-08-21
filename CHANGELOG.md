@@ -2,6 +2,38 @@
 
 All notable changes to ReceiveAllChats are documented here.
 
+## [2.0.1] - 2026-08-21
+
+### Fixed
+
+- After a collect that found rewards in exactly one dialogue, that dialogue's
+  attachment badge (and the lit "Receive All" button) stayed on until the
+  dialogue was selected or the button pressed again when UI Fixes was not
+  installed. The mod now recognises its own transfers and finalises the
+  counters of every collected dialogue itself, including the single-dialogue
+  case; transfers started elsewhere (e.g. the per-message "receive" button)
+  are left to vanilla/UI Fixes as before.
+
+### Changed
+
+- Counter updates after the transfer window are now written strictly after
+  UI Fixes' own update (extra yield after the operation-queue flush), so the
+  two mods can no longer race on the same dialogue counters.
+- Declares a soft dependency on UI Fixes (`com.tyfon.uifixes`).
+
+## [2.0.0] - 2026-08-09
+
+Port to SPT 4.1. The 2.x line requires SPT 4.1; 1.1.0 remains the final
+release for SPT 4.0.
+
+### Changed
+
+- Client plugin and server mod rebuilt against SPT 4.1 (updated game
+  assemblies and SPT server packages). Collecting behavior is unchanged.
+- Install layout follows SPT 4.1: the server mod extracts to
+  `SPT_Runtime/user/mods/ReceiveAllChats/` (SPT 4.1 renamed the server
+  folder from `SPT` to `SPT_Runtime`).
+
 ## [1.1.0] - 2026-07-30
 
 First release with an optional server component. Installing the client alone

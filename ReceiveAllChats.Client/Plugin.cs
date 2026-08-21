@@ -9,6 +9,7 @@ using System.IO;
 namespace ReceiveAllChats;
 
 [BepInPlugin(ReceiveAllChatsProtocol.ModGuid, ReceiveAllChatsProtocol.PluginName, ReceiveAllChatsProtocol.Version)]
+[BepInDependency("com.tyfon.uifixes", BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin
 {
     private const string Version = ReceiveAllChatsProtocol.Version;

@@ -1,7 +1,9 @@
+using ChatShared;
 using EFT.UI.Chat;
 using HarmonyLib;
 using SPT.Reflection.Patching;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using EFT;
@@ -14,8 +16,11 @@ internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
         AccessTools.Method(typeof(ChatScreen), "CG_TransferAll");
 
     private static bool _collecting;
+    private static DialogueChatMessage[] _lastCollectedMessages;
 
     internal static bool IsCollecting => _collecting;
+    internal static IReadOnlyList<DialogueChatMessage> LastCollectedMessages => _lastCollectedMessages;
+    internal static void ConsumeLastCollectedMessages() => _lastCollectedMessages = null;
 
     protected override MethodBase GetTargetMethod() =>
         AccessTools.Method(typeof(ChatScreen), nameof(ChatScreen.TransferAll));
@@ -37,10 +42,12 @@ internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
         }
 
         _collecting = true;
+        _lastCollectedMessages = null;
         try
         {
             var messages = await AttachmentCollector.CollectAllMessages(socialNetwork);
             Plugin.LogDebug($"Collector returned {messages.Length} reward message(s).");
+            _lastCollectedMessages = messages;
             if (messages.Length > 0)
             {
                 Plugin.LogDebug("Opening transfer/reward handling screen.");
