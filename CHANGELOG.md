@@ -2,6 +2,19 @@
 
 All notable changes to ReceiveAllChats are documented here.
 
+## [3.0.1] - 2026-10-18
+
+### Fixed
+
+- Receive All could open the transfer window without some of the attachments
+  when they belonged to a dialogue that had not been opened in the UI yet. The
+  aggregated server response is deserialized on its own, without the client's
+  message bookkeeping, so messages from unopened dialogues could go missing
+  when the window was built. Every dialogue that still reports pending
+  attachments is now also fetched through the game's own
+  `SocialNetwork.AllAttachmentsFromDialog` and merged with the aggregate by
+  message id, with the client-fetched message winning.
+
 ## [3.0.0] - 2026-10-17
 
 Port to SPT 5.0. The 3.x line requires SPT 5.0; 2.0.1 remains the final release

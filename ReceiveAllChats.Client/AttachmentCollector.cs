@@ -53,9 +53,15 @@ internal static class AttachmentCollector
         var serverMessages = await TryCollectFromServer(socialNetwork);
         if (serverMessages != null)
         {
-            ApplyServerResult(socialNetwork, serverMessages);
-            Plugin.LogDebug($"Collect finished via server aggregation. messages={serverMessages.Count}, elapsedMs={stopwatch.ElapsedMilliseconds}");
-            return serverMessages;
+            // The aggregate response is deserialized in isolation, so messages from
+            // dialogues the UI has not loaded may not resolve when the transfer window
+            // is built. Re-fetch every dialogue that still reports pending attachments
+            // through the game's own API and merge the results by message id.
+            var messages = await MergeWithPendingDialogues(socialNetwork, dialogues, serverMessages);
+            ApplyServerResult(socialNetwork, messages);
+            LogCollectedMessages(socialNetwork, messages);
+            Plugin.LogDebug($"Collect finished via server aggregation. serverMessages={serverMessages.Count}, mergedMessages={messages.Count}, elapsedMs={stopwatch.ElapsedMilliseconds}");
+            return messages;
         }
 
         Plugin.LogDebug("Server aggregation unavailable; falling back to dialogue-list scanning.");
@@ -116,8 +122,83 @@ internal static class AttachmentCollector
             }
         }
 
+        LogCollectedMessages(socialNetwork, allMessages);
         Plugin.LogDebug($"Collect finished. messages={allMessages.Count}, scannedDialogues={dialogues.Count}, dialoguesWithRewards={dialoguesWithRewards}, timedOutRequests={timedOutRequests}, staleCounters={staleCounters}, fullyRead={socialNetwork.FullyRead}, elapsedMs={stopwatch.ElapsedMilliseconds}");
         return allMessages;
+    }
+
+    /// <summary>
+    /// Merges the aggregate response with messages fetched through
+    /// <see cref="SocialNetwork.AllAttachmentsFromDialog"/>. The game's own fetch lets the
+    /// client register the messages it is about to show, which the raw aggregate response
+    /// does not do; the client-fetched message wins when both contain the same id.
+    /// </summary>
+    private static async Task<List<DialogueChatMessage>> MergeWithPendingDialogues(
+        SocialNetwork socialNetwork,
+        List<UpdatableChatDialogue> dialogues,
+        List<DialogueChatMessage> serverMessages)
+    {
+        var merged = new Dictionary<string, DialogueChatMessage>();
+        foreach (var message in serverMessages)
+        {
+            if (message?._id != null)
+            {
+                merged[message._id] = message;
+            }
+        }
+
+        var pending = new List<UpdatableChatDialogue>();
+        for (var i = 0; i < dialogues.Count; i++)
+        {
+            if (IsFlagged(dialogues[i]))
+            {
+                pending.Add(dialogues[i]);
+            }
+        }
+
+        var pendingFetched = 0;
+        if (pending.Count > 0)
+        {
+            var results = new List<DialogueChatMessage>[pending.Count];
+            using (var semaphore = new SemaphoreSlim(Plugin.MaxConcurrentRequests))
+            {
+                var tasks = new List<Task>(pending.Count);
+                for (var index = 0; index < pending.Count; index++)
+                {
+                    tasks.Add(FetchAsync(socialNetwork, pending, index, results, semaphore));
+                }
+
+                await Task.WhenAll(tasks);
+            }
+
+            for (var i = 0; i < pending.Count; i++)
+            {
+                if (results[i] == null)
+                {
+                    continue;
+                }
+
+                pendingFetched++;
+                foreach (var message in results[i])
+                {
+                    if (message?._id != null)
+                    {
+                        merged[message._id] = message;
+                    }
+                }
+            }
+        }
+
+        Plugin.LogDebug($"Merged aggregate with client-side fetches. serverMessages={serverMessages.Count}, pendingDialogues={pending.Count}, clientFetchedDialogues={pendingFetched}, mergedMessages={merged.Count}");
+        return new List<DialogueChatMessage>(merged.Values);
+    }
+
+    private static void LogCollectedMessages(SocialNetwork socialNetwork, List<DialogueChatMessage> messages)
+    {
+        foreach (var message in messages)
+        {
+            Plugin.LogDebug($"Collected message. id={message._id}, dialogue={GetDialogueIdFromMessage(message, socialNetwork) ?? "unknown"}, anyItems={message.AnyItems}, itemsNull={message.Items == null}, stashNull={message.Items?.Stash == null}");
+        }
     }
 
     private static async Task FetchAsync(
