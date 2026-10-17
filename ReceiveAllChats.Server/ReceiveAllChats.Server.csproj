@@ -9,10 +9,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <OutputType>Library</OutputType>
-    <Version>2.0.1</Version>
+    <Version>3.0.0</Version>
     <OutputPath>bin\$(Configuration)\$(AssemblyName)\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <SptModName>ReceiveAllChats</SptModName>
+    <!-- SPT 5.0 is not on NuGet yet, so the server mod compiles against the assemblies
+         shipped with the install. Override with -p:SptRoot=D:\SPT when needed. -->
+    <SptRoot Condition="'$(SptRoot)' == ''">C:\SPT-5.0-BE</SptRoot>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,14 +23,30 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="SPTarkov.Common" Version="4.1.0" />
-    <PackageReference Include="SPTarkov.DI" Version="4.1.0" />
-    <PackageReference Include="SPTarkov.Reflection" Version="4.1.0" />
-    <PackageReference Include="SPTarkov.Server.Core" Version="4.1.0" />
+    <Reference Include="SPTarkov.Server.Core">
+      <HintPath>$(SptRoot)\SPT_Runtime\SPTarkov.Server.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Common">
+      <HintPath>$(SptRoot)\SPT_Runtime\SPTarkov.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.DI">
+      <HintPath>$(SptRoot)\SPT_Runtime\SPTarkov.DI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Reflection">
+      <HintPath>$(SptRoot)\SPT_Runtime\SPTarkov.Reflection.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SemanticVersioning">
+      <HintPath>$(SptRoot)\SPT_Runtime\SemanticVersioning.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(DeployOnBuild)' != 'false'">
-    <Exec Command="if not exist &quot;$(ProjectDir)..\..\..\SPT_Runtime\user\mods\$(SptModName)&quot; mkdir &quot;$(ProjectDir)..\..\..\SPT_Runtime\user\mods\$(SptModName)&quot;&#xD;&#xA;copy &quot;$(TargetPath)&quot; &quot;$(ProjectDir)..\..\..\SPT_Runtime\user\mods\$(SptModName)\$(TargetFileName)&quot;" />
+    <Exec Command="if not exist &quot;$(SptRoot)\SPT_Runtime\user\mods\$(SptModName)&quot; mkdir &quot;$(SptRoot)\SPT_Runtime\user\mods\$(SptModName)&quot;&#xD;&#xA;copy &quot;$(TargetPath)&quot; &quot;$(SptRoot)\SPT_Runtime\user\mods\$(SptModName)\$(TargetFileName)&quot;" />
   </Target>
 
 </Project>

@@ -1,39 +1,44 @@
 using ChatShared;
-using EFT.UI.Chat;
+using EFT;
 using HarmonyLib;
-using SPT.Reflection.Patching;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using SPTushonka.Reflection.Patching;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using UnityEngine;
-using EFT;
 
 namespace ReceiveAllChats.Patches;
 
+/// <summary>
+/// Replaces the per-dialogue "Receive All" transfer with a collection across every dialogue,
+/// then hands the aggregated messages to the vanilla reward/transfer flow.
+/// </summary>
 internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
 {
-    private static readonly MethodInfo ProcessMessagesMethod =
-        AccessTools.Method(typeof(ChatScreen), "CG_TransferAll");
-
     private static bool _collecting;
-    private static DialogueChatMessage[] _lastCollectedMessages;
+    private static List<DialogueChatMessage> _lastCollectedMessages;
 
     internal static bool IsCollecting => _collecting;
     internal static IReadOnlyList<DialogueChatMessage> LastCollectedMessages => _lastCollectedMessages;
     internal static void ConsumeLastCollectedMessages() => _lastCollectedMessages = null;
 
     protected override MethodBase GetTargetMethod() =>
-        AccessTools.Method(typeof(ChatScreen), nameof(ChatScreen.TransferAll));
+        AccessTools.Method(typeof(EFT.UI.Chat.ChatScreen), nameof(EFT.UI.Chat.ChatScreen.TransferAll));
 
     [PatchPrefix]
-    private static bool Prefix(ChatScreen __instance, SocialNetwork ____social)
+    private static bool Prefix(EFT.UI.Chat.ChatScreen __instance)
     {
+        if (__instance == null)
+        {
+            return true;
+        }
+
         Plugin.LogDebug("Receive-all button clicked.");
-        Collect(__instance, ____social);
+        Collect(__instance);
         return false;
     }
 
-    private static async void Collect(ChatScreen chatScreen, SocialNetwork socialNetwork)
+    private static async void Collect(EFT.UI.Chat.ChatScreen chatScreen)
     {
         if (_collecting)
         {
@@ -45,13 +50,15 @@ internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
         _lastCollectedMessages = null;
         try
         {
-            var messages = await AttachmentCollector.CollectAllMessages(socialNetwork);
-            Plugin.LogDebug($"Collector returned {messages.Length} reward message(s).");
+            var messages = await AttachmentCollector.CollectAllMessages(chatScreen._social);
+            Plugin.LogDebug($"Collector returned {messages.Count} reward message(s).");
             _lastCollectedMessages = messages;
-            if (messages.Length > 0)
+            if (messages.Count > 0)
             {
                 Plugin.LogDebug("Opening transfer/reward handling screen.");
-                ProcessMessagesMethod.Invoke(chatScreen, new object[] { messages });
+                // The screen opens asynchronously; collecting is considered finished here so
+                // the button becomes usable again while the transfer window is up.
+                _ = chatScreen.ProcessRewards(new Il2CppReferenceArray<DialogueChatMessage>(messages.ToArray()));
             }
             else
             {
@@ -60,7 +67,7 @@ internal sealed class ReceiveAllFromAllChatsPatch : ModulePatch
         }
         catch (Exception exception)
         {
-            Debug.LogError($"ReceiveAllChats failed to collect attachments: {exception}");
+            Plugin.Log?.LogError($"ReceiveAllChats failed to collect attachments: {exception}");
         }
         finally
         {

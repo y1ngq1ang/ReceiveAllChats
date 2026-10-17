@@ -2,6 +2,37 @@
 
 All notable changes to ReceiveAllChats are documented here.
 
+## [3.0.0] - 2026-10-17
+
+Port to SPT 5.0. The 3.x line requires SPT 5.0; 2.0.1 remains the final release
+for SPT 4.1. Collecting behavior is unchanged.
+
+### Changed
+
+- Client plugin rebuilt for the SPT 5.0 IL2CPP runtime: it is now a BepInEx 6
+  `BasePlugin` for `net10.0` compiled against the interop assemblies in
+  `BepInEx\interop`, and patching uses `SPTushonka.Reflection.Patching`.
+- Instance fields are read as properties (`__instance._receiveAllButton` instead
+  of Harmony `___field` injection), as IL2CPP lowerings expose fields that way.
+- The 5.0 game code moved several targets, so the patches were re-anchored:
+  - `ChatScreen.TransferAll` now takes a single dialogue; the receive-all flow
+    replaces it and hands the aggregated messages to `ChatScreen.ProcessRewards`
+    (which replaced `CG_TransferAll`).
+  - `SocialNetwork.UpdateDialogueList` returns a `Task` instead of taking a
+    callback, so the updating flag is cleared once that task completes.
+  - The messenger no longer exposes a social-network field on
+    `ChatMessageSendBlock`, so the chat screen's instance is reached through the
+    `CommonUI` singleton.
+  - Server aggregation requests go through the session's `Send<T>` pipeline on
+    `EftClientBackendSession` instead of the obfuscated request method, and the
+    session is retrieved through the item UI context.
+- Server mod compiles against the SPT 5.0 assemblies shipped with the game
+  (`SPT_Runtime`) instead of the 4.1.0 NuGet packages; both projects resolve the
+  install root from the `SptRoot` MSBuild property (default `C:\SPT-5.0-BE`).
+- Install layout follows SPT 5.0: the client goes to `BepInEx\plugins\` and the
+  server mod extracts to `SPT_Runtime\user\mods\ReceiveAllChats\`, which now
+  exists directly in the game folder.
+
 ## [2.0.1] - 2026-08-21
 
 ### Fixed

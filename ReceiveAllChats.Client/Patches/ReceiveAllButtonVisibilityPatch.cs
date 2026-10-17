@@ -1,73 +1,54 @@
-using EFT.UI;
-using EFT.UI.Chat;
 using HarmonyLib;
-using SPT.Reflection.Patching;
-using System.Collections.Generic;
+using SPTushonka.Reflection.Patching;
 using System.Reflection;
-using EFT;
-using ChatShared;
 
 namespace ReceiveAllChats.Patches;
 
+/// <summary>
+/// Vanilla only lights the "Receive All" button up for the dialogue that is currently
+/// selected. The mod keeps it visible whenever any dialogue still holds attachments.
+/// </summary>
 internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
 {
-    private static readonly MethodInfo EnableHighlight =
-        AccessTools.Method(typeof(ChatMessageSendBlock), "EnableBlock");
-
-    private static readonly MethodInfo DisableHighlight =
-        AccessTools.Method(typeof(ChatMessageSendBlock), "DisableBlock");
-
-    private static readonly MethodInfo KeepHighlightAlive =
-        AccessTools.Method(typeof(ChatMessageSendBlock), "CalculateEndStorageTime");
-
     protected override MethodBase GetTargetMethod() =>
-        AccessTools.Method(typeof(ChatMessageSendBlock), "UpdateRewards");
+        AccessTools.Method(typeof(EFT.UI.Chat.ChatMessageSendBlock), "UpdateRewards");
 
     [PatchPostfix]
-    private static void Postfix(
-        ChatMessageSendBlock __instance,
-        SocialNetwork ___socialNetwork,
-        DefaultUIButton ____receiveAllButton) =>
-        Apply(__instance, ___socialNetwork, ____receiveAllButton);
+    private static void Postfix(EFT.UI.Chat.ChatMessageSendBlock __instance) => Apply(__instance);
 
     internal sealed class OnGlobalMessagePatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod() =>
-            AccessTools.Method(typeof(ChatMessageSendBlock), nameof(ChatMessageSendBlock.LastMessageUpdatedHandler));
+            AccessTools.Method(typeof(EFT.UI.Chat.ChatMessageSendBlock), nameof(EFT.UI.Chat.ChatMessageSendBlock.LastMessageUpdatedHandler));
 
         [PatchPostfix]
-        private static void Postfix(
-            ChatMessageSendBlock __instance,
-            SocialNetwork ___socialNetwork,
-            DefaultUIButton ____receiveAllButton,
-            KeyValuePair<UpdatableChatDialogue, DialogueChatMessage> dialogue)
-        {
-            if (dialogue.Value.HasRewards)
-            {
-                Apply(__instance, ___socialNetwork, ____receiveAllButton);
-            }
-        }
+        private static void Postfix(EFT.UI.Chat.ChatMessageSendBlock __instance) => Apply(__instance);
     }
 
     internal sealed class UpdatePatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod() =>
-            AccessTools.Method(typeof(ChatMessageSendBlock), nameof(ChatMessageSendBlock.Update));
+            AccessTools.Method(typeof(EFT.UI.Chat.ChatMessageSendBlock), nameof(EFT.UI.Chat.ChatMessageSendBlock.Update));
 
         [PatchPostfix]
-        private static void Postfix(
-            ChatMessageSendBlock __instance,
-            SocialNetwork ___socialNetwork,
-            DefaultUIButton ____receiveAllButton) =>
-            Apply(__instance, ___socialNetwork, ____receiveAllButton);
+        private static void Postfix(EFT.UI.Chat.ChatMessageSendBlock __instance) => Apply(__instance);
     }
 
-    private static void Apply(
-        ChatMessageSendBlock block,
-        SocialNetwork socialNetwork,
-        DefaultUIButton receiveAllButton)
+    private static void Apply(EFT.UI.Chat.ChatMessageSendBlock block)
     {
-        if (socialNetwork == null || receiveAllButton == null)
+        if (block == null)
+        {
+            return;
+        }
+
+        var receiveAllButton = block._receiveAllButton;
+        if (receiveAllButton == null)
+        {
+            return;
+        }
+
+        var socialNetwork = ChatUi.GetSocialNetwork();
+        if (socialNetwork == null)
         {
             return;
         }
@@ -78,12 +59,19 @@ internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
 
         if (hasAttachments)
         {
-            KeepHighlightAlive.Invoke(block, new object[] { null });
-            EnableHighlight.Invoke(block, null);
+            // 5.0 needs a message here, so the block is kept alive for the dialogue it is
+            // showing; dialogues without a message fall back to the per-frame update patch.
+            var message = block._dialogue?.Message;
+            if (message != null)
+            {
+                block.CalculateEndStorageTime(message);
+            }
+
+            block.EnableBlock();
         }
         else
         {
-            DisableHighlight.Invoke(block, null);
+            block.DisableBlock();
         }
     }
 }

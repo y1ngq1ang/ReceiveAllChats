@@ -1,8 +1,10 @@
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using BepInEx.Unity.IL2CPP;
 using ReceiveAllChats.Patches;
 using ReceiveAllChats.Shared;
+using SPTushonka.Reflection.Patching;
 using System;
 using System.IO;
 
@@ -10,12 +12,12 @@ namespace ReceiveAllChats;
 
 [BepInPlugin(ReceiveAllChatsProtocol.ModGuid, ReceiveAllChatsProtocol.PluginName, ReceiveAllChatsProtocol.Version)]
 [BepInDependency("com.tyfon.uifixes", BepInDependency.DependencyFlags.SoftDependency)]
-public class Plugin : BaseUnityPlugin
+public class Plugin : BasePlugin
 {
     private const string Version = ReceiveAllChatsProtocol.Version;
     private static readonly object DebugLogLock = new();
 
-    internal static ManualLogSource Log { get; private set; }
+    internal static new ManualLogSource Log { get; private set; }
     internal static ConfigEntry<bool> DebugLogging { get; private set; }
     internal static ConfigEntry<bool> DebugFileLogging { get; private set; }
     internal static ConfigEntry<bool> MirrorDebugLoggingToBepInExLog { get; private set; }
@@ -24,9 +26,9 @@ public class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> UseServerAggregationRequest { get; private set; }
     internal static string DebugLogPath { get; private set; }
 
-    private void Awake()
+    public override void Load()
     {
-        Log = Logger;
+        Log = base.Log;
         DebugLogPath = Path.Combine(BepInEx.Paths.ConfigPath, "ReceiveAllChats-debug.log");
         DebugLogging = Config.Bind(
             "Debug",
@@ -61,18 +63,25 @@ public class Plugin : BaseUnityPlugin
 
         StartDebugLog();
 
+        // Each patch is enabled on its own so that one target moving in a future game
+        // build no longer knocks out every other feature of the mod.
+        EnablePatch(new DialogueListUpdatingPatch());
+        EnablePatch(new ReceiveAllFromAllChatsPatch());
+        EnablePatch(new ReceiveAllButtonVisibilityPatch());
+        EnablePatch(new ReceiveAllButtonVisibilityPatch.OnGlobalMessagePatch());
+        EnablePatch(new ReceiveAllButtonVisibilityPatch.UpdatePatch());
+        EnablePatch(new TransferItemsClosePatch());
+    }
+
+    private void EnablePatch(ModulePatch patch)
+    {
         try
         {
-            new DialogueListUpdatingPatch().Enable();
-            new ReceiveAllFromAllChatsPatch().Enable();
-            new ReceiveAllButtonVisibilityPatch().Enable();
-            new ReceiveAllButtonVisibilityPatch.OnGlobalMessagePatch().Enable();
-            new ReceiveAllButtonVisibilityPatch.UpdatePatch().Enable();
-            new TransferItemsClosePatch().Enable();
+            patch.Enable();
         }
-        catch (System.Exception exception)
+        catch (Exception exception)
         {
-            Logger.LogError($"ReceiveAllChats failed to apply patches, the mod will not work: {exception}");
+            Log?.LogError($"ReceiveAllChats failed to apply {patch.GetType().Name}, the related feature will not work: {exception}");
         }
     }
 

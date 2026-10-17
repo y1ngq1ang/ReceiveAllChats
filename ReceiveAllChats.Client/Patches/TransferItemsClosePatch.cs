@@ -1,86 +1,130 @@
 using ChatShared;
-using EFT.UI;
-using EFT.UI.Chat;
 using HarmonyLib;
-using SPT.Reflection.Patching;
+using SPTushonka.Reflection.Il2Cpp;
+using SPTushonka.Reflection.Patching;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using EFT;
 
 namespace ReceiveAllChats.Patches;
 
+/// <summary>
+/// After the transfer window closes the dialogue counters have to be finalised. The 5.0
+/// window exposes its message list and context as properties, and the chat screen is
+/// reached through the UI singleton instead of a field lookup on <c>ChatScreen</c>.
+/// </summary>
 internal sealed class TransferItemsClosePatch : ModulePatch
 {
-    private static FieldInfo _dialogueViewDialogueField;
-
-    protected override MethodBase GetTargetMethod()
-    {
-        _dialogueViewDialogueField = AccessTools.Field(typeof(DialogueView), "_dialogue");
-        return AccessTools.DeclaredMethod(typeof(TransferItemsScreen), nameof(TransferItemsScreen.Close));
-    }
+    protected override MethodBase GetTargetMethod() =>
+        AccessTools.Method(typeof(EFT.UI.TransferItemsScreen), nameof(EFT.UI.TransferItemsScreen.Close));
 
     [HarmonyPriority(Priority.Last)]
     [PatchPostfix]
-    private static async void Postfix(IEnumerable<DialogueChatMessage> ____messages, ItemUiContext ____itemUiContext)
+    private static async void Postfix(EFT.UI.TransferItemsScreen __instance)
     {
-        if (____messages == null || !____messages.Any())
+        var transferredMessages = new List<DialogueChatMessage>();
+        var screenMessages = __instance?._messages;
+        if (screenMessages != null)
+        {
+            foreach (var message in screenMessages)
+            {
+                if (message != null)
+                {
+                    transferredMessages.Add(message);
+                }
+            }
+        }
+
+        if (transferredMessages.Count == 0)
         {
             return;
         }
 
-        var socialNetwork = ____itemUiContext.Session.SocialNetwork;
-        var transferredMessages = ____messages.ToList();
+        var itemUiContext = __instance._itemUiContext;
+        var socialNetwork = itemUiContext?.ClientSession?.SocialNetwork;
+        if (socialNetwork == null)
+        {
+            Plugin.LogDebug("TransferItemsScreen closed before the social network was available.");
+            return;
+        }
+
         var snapshot = ReceiveAllFromAllChatsPatch.LastCollectedMessages;
-        var snapshotIds = snapshot == null ? null : new HashSet<string>(snapshot.Select(message => message._id));
-        var isOwnTransfer = snapshotIds != null && transferredMessages.All(message => snapshotIds.Contains(message._id));
+        var isOwnTransfer = IsOwnTransfer(snapshot, transferredMessages);
         if (isOwnTransfer)
         {
             ReceiveAllFromAllChatsPatch.ConsumeLastCollectedMessages();
         }
 
-        var countedMessages = isOwnTransfer ? snapshot : transferredMessages;
-        var mappedMessages = countedMessages
-            .Select(message => new { Message = message, Dialogue = GetDialogFromMessage(message, socialNetwork) })
-            .ToList();
-        var unmappedMessages = mappedMessages.Count(entry => entry.Dialogue == null);
+        var countedMessages = isOwnTransfer ? AttachmentCollector.ToManagedList(snapshot) : transferredMessages;
+        var messagesByDialogue = new List<KeyValuePair<UpdatableChatDialogue, List<DialogueChatMessage>>>();
+        var unmappedMessages = 0;
+
+        foreach (var message in countedMessages)
+        {
+            var dialogue = GetDialogFromMessage(message, socialNetwork);
+            if (dialogue == null)
+            {
+                unmappedMessages++;
+                continue;
+            }
+
+            var existing = messagesByDialogue.FindIndex(entry => entry.Key == dialogue);
+            if (existing < 0)
+            {
+                messagesByDialogue.Add(new KeyValuePair<UpdatableChatDialogue, List<DialogueChatMessage>>(dialogue, new List<DialogueChatMessage> { message }));
+            }
+            else
+            {
+                messagesByDialogue[existing].Value.Add(message);
+            }
+        }
+
         if (unmappedMessages > 0)
         {
             Plugin.LogDebug($"Could not map {unmappedMessages} reward message(s) back to a dialogue.");
         }
 
-        var messagesByDialogue = mappedMessages
-            .Where(entry => entry.Dialogue != null)
-            .GroupBy(entry => entry.Dialogue)
-            .ToList();
-
-        Plugin.LogDebug($"TransferItemsScreen closed. transferred={transferredMessages.Count}, ownTransfer={isOwnTransfer}, countedMessages={mappedMessages.Count}, mappedDialogues={messagesByDialogue.Count}");
+        Plugin.LogDebug($"TransferItemsScreen closed. transferred={transferredMessages.Count}, ownTransfer={isOwnTransfer}, countedMessages={countedMessages.Count}, mappedDialogues={messagesByDialogue.Count}");
 
         if (!isOwnTransfer && messagesByDialogue.Count <= 1)
         {
             return;
         }
 
-        await ____itemUiContext.ClientSession.FlushOperationQueue();
+        var session = itemUiContext?.ClientSession?.TryCast<EFT.EftClientBackendSession>();
+        if (session != null)
+        {
+            try
+            {
+                await session.FlushOperationQueue().AsManaged();
+            }
+            catch (Exception exception)
+            {
+                Plugin.LogDebug($"Flushing the operation queue failed. error={exception.GetBaseException().Message}");
+            }
+        }
+
         await Task.Yield();
 
-        var dialoguesContainerField = AccessTools.Field(typeof(ChatScreen), "_dialoguesContainer");
-        var chatScreen = MonoBehaviourSingleton<CommonUI>.Instance?.ChatScreen;
-        var dialoguesContainer = chatScreen == null
-            ? null
-            : dialoguesContainerField.GetValue(chatScreen) as DialoguesContainer;
-        DialogueView[] dialogueViews = dialoguesContainer?.GetComponentsInChildren<DialogueView>();
+        var dialogueViews = ChatUi.GetChatScreen()?._dialoguesContainer?.GetComponentsInChildren<EFT.UI.Chat.DialogueView>();
 
         foreach (var group in messagesByDialogue)
         {
             var dialogue = group.Key;
-            var remaining = group.Count(entry => entry.Message.DisplayRewardStatus);
+            var remaining = 0;
+            foreach (var message in group.Value)
+            {
+                if (message.DisplayRewardStatus)
+                {
+                    remaining++;
+                }
+            }
 
             dialogue.AttachmentsNew = remaining;
             dialogue.HasMessagesWithRewards = remaining > 0;
 
-            dialogue.OnDialogueAttachmentsChanged.Invoke();
+            dialogue.OnDialogueAttachmentsChanged?.Invoke();
             Plugin.LogDebug($"Updated dialogue after transfer. id={dialogue._id}, type={dialogue.Type}, remaining={remaining}");
 
             if (dialogueViews == null)
@@ -88,19 +132,51 @@ internal sealed class TransferItemsClosePatch : ModulePatch
                 continue;
             }
 
-            var dialogueView = dialogueViews.FirstOrDefault(view =>
-                _dialogueViewDialogueField.GetValue(view) == dialogue);
-
-            if (dialogueView != null)
+            foreach (var dialogueView in dialogueViews)
             {
-                dialogueView.NewAttachmentsMessagesCount = dialogue.AttachmentsNew;
+                if (dialogueView != null && dialogueView._dialogue == dialogue)
+                {
+                    dialogueView.NewAttachmentsMessagesCount = dialogue.AttachmentsNew;
+                    break;
+                }
             }
         }
 
-        MonoBehaviourSingleton<PreloaderUI>.Instance.MenuTaskBar.SetNewMessagesCount();
+        try
+        {
+            MonoBehaviourSingleton<EFT.UI.PreloaderUI>.Instance?.MenuTaskBar?.SetNewMessagesCount();
+        }
+        catch (Exception exception)
+        {
+            Plugin.LogDebug($"Refreshing the new-message counters failed. error={exception.GetBaseException().Message}");
+        }
     }
 
-    private static UpdatableChatDialogue GetDialogFromMessage(DialogueChatMessage message, SocialNetwork socialNetwork)
+    private static bool IsOwnTransfer(IReadOnlyList<DialogueChatMessage> snapshot, List<DialogueChatMessage> transferredMessages)
+    {
+        if (snapshot == null)
+        {
+            return false;
+        }
+
+        var snapshotIds = new HashSet<string>();
+        for (var i = 0; i < snapshot.Count; i++)
+        {
+            snapshotIds.Add(snapshot[i]._id);
+        }
+
+        foreach (var message in transferredMessages)
+        {
+            if (!snapshotIds.Contains(message._id))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static UpdatableChatDialogue GetDialogFromMessage(DialogueChatMessage message, EFT.SocialNetwork socialNetwork)
     {
         string dialogueId;
         if (message.Member != null)
@@ -117,12 +193,15 @@ internal sealed class TransferItemsClosePatch : ModulePatch
             return null;
         }
 
-        var dialogue = socialNetwork.Dialogues.FirstOrDefault(d => d._id == dialogueId);
-        if (dialogue == null)
+        foreach (var dialogue in socialNetwork.Dialogues)
         {
-            Plugin.LogDebug($"No dialogue found for reward message. messageId={message._id}, type={message.Type}, memberId={dialogueId}");
+            if (dialogue != null && dialogue._id == dialogueId)
+            {
+                return dialogue;
+            }
         }
 
-        return dialogue;
+        Plugin.LogDebug($"No dialogue found for reward message. messageId={message._id}, type={message.Type}, memberId={dialogueId}");
+        return null;
     }
 }
