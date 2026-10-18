@@ -29,13 +29,69 @@ internal static class AttachmentCollector
                 continue;
             }
 
-            if (dialogue.AttachmentsNew > 0 || dialogue.HasMessagesWithRewards)
+            if (dialogue.AttachmentsNew > 0 || dialogue.HasMessagesWithRewards || HasLoadedRewardMessage(dialogue))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The dialogue counters can lag behind the messages that are already loaded (for
+    /// example after the mailbox was read), so loaded messages are checked as well.
+    /// </summary>
+    private static bool HasLoadedRewardMessage(UpdatableChatDialogue dialogue)
+    {
+        try
+        {
+            var messages = dialogue.ChatMessages;
+            if (messages == null)
+            {
+                return false;
+            }
+
+            foreach (var message in messages)
+            {
+                if (message != null && message.DisplayRewardStatus)
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            Plugin.LogDebug($"Could not inspect loaded messages. id={dialogue._id}, error={exception.Message}");
+        }
+
+        return false;
+    }
+
+    public static string DescribeDialogueFlags(SocialNetwork socialNetwork)
+    {
+        if (socialNetwork == null)
+        {
+            return "socialNetwork=null";
+        }
+
+        var description = new System.Text.StringBuilder();
+        foreach (var dialogue in socialNetwork.Dialogues)
+        {
+            if (dialogue == null)
+            {
+                description.Append("null  ");
+                continue;
+            }
+
+            description.Append(dialogue._id)
+                .Append(":type=").Append(dialogue.Type)
+                .Append(":attachments=").Append(dialogue.AttachmentsNew)
+                .Append(":rewards=").Append(dialogue.HasMessagesWithRewards)
+                .Append("  ");
+        }
+
+        return description.ToString();
     }
 
     public static async Task<List<DialogueChatMessage>> CollectAllMessages(SocialNetwork socialNetwork)

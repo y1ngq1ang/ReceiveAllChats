@@ -2,6 +2,23 @@
 
 All notable changes to ReceiveAllChats are documented here.
 
+## [3.0.2] - 2026-10-18
+
+### Fixed
+
+- The Receive All button stayed hidden when the only unclaimed attachment was a
+  mail that arrived while the game was running. The client's per-dialogue
+  counters (`attachmentsNew` / `hasMessagesWithRewards`) are not always
+  refreshed for newly delivered mail, so the mod now also checks the messages
+  already loaded in the dialogue (`DisplayRewardStatus`) before hiding the
+  button. Verified in game with a single newly delivered attachment.
+
+### Changed
+
+- Debug builds log every Receive All visibility transition together with the
+  current per-dialogue counters, which makes "the button does not appear"
+  reports diagnosable from `ReceiveAllChats-debug.log`.
+
 ## [3.0.1] - 2026-10-18
 
 ### Fixed

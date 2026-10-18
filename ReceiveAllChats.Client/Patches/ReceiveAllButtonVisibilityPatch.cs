@@ -10,6 +10,8 @@ namespace ReceiveAllChats.Patches;
 /// </summary>
 internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
 {
+    private static bool? _lastReportedHasAttachments;
+
     protected override MethodBase GetTargetMethod() =>
         AccessTools.Method(typeof(EFT.UI.Chat.ChatMessageSendBlock), "UpdateRewards");
 
@@ -54,6 +56,12 @@ internal sealed class ReceiveAllButtonVisibilityPatch : ModulePatch
         }
 
         var hasAttachments = AttachmentCollector.HasPendingAttachments(socialNetwork);
+        if (_lastReportedHasAttachments != hasAttachments)
+        {
+            _lastReportedHasAttachments = hasAttachments;
+            Plugin.LogDebug($"Receive-all button visibility -> {hasAttachments}. {AttachmentCollector.DescribeDialogueFlags(socialNetwork)}");
+        }
+
         receiveAllButton.gameObject.SetActive(hasAttachments);
         receiveAllButton.Interactable = hasAttachments && !ReceiveAllFromAllChatsPatch.IsCollecting;
 
